@@ -10,6 +10,11 @@ declare -A zone_array
 declare -A subdomain_info
 declare -A a_record_per_zone
 
+# Unset variables
+function unset_arrays {
+unset current_wideip_info name subdomain domain type aliases description status failure_rcode last_resort_pool load_balancing_decision_log metadata minimal_response partition persist_cidr_ipv4 persist_cidr_ipv6 persistence pool_lb_mode pools pool_cname topology_edns0 ttl_persistence poolnames poolnames_array zone_array subdomain_info a_record_per_zone;
+}
+
 # Loop through each line of output
 while IFS= read -r line; do
     # Extracting specific details using awk and sed based on the current line
@@ -54,32 +59,47 @@ while IFS= read -r line; do
     # Store subdomain information in subdomain_info array
     subdomain_info["$subdomain"]="${current_wideip_info[@]}"
 	
-    # Store subdomain type "a" and add it to the array for that zone
-    if [ "$type" == "a" ]; then
-        a_record_per_zone["$domain"]+=" $subdomain"
-    fi
-	
+	# Store subdomain type "a" and add it to the array for that zone
+	if [ "$type" == "a" ]; then
+	    a_record_per_zone[$domain]="${a_record_per_zone[$domain]}${a_record_per_zone[$domain]:+,}$subdomain"
+	fi
 done <<< "$output"
 
+# Loop through each domain in a_record_per_zone and echo its A record subdomains
+for domain in "${!a_record_per_zone[@]}"; do
+    echo "Domain: $domain"
+    echo "A Record Subdomains: ${a_record_per_zone[$domain]}"
+    echo "--------------------------"
+    # Initialize an empty string to store the JSON strings
+    json_string=""
+	
+    # Loop through each record in the current zone
+    for record in ${a_record_per_zone[$domain]//,/ }; do
+        # Create JSON string for each A record and append to the existing string
+        json_string+="{\"ttl\":3600,\"a_record\":{\"name\":\"$record\",\"values\":[\"8.8.8.8\"]}},"
+    done
+
+    # Remove the trailing comma from the JSON string
+    json_string="${json_string%,}"
+
+    # Print the final JSON string
+    echo "[$json_string]"
+done
+
+
+
+
+
+
+unset_arrays
+
+# Unset variables
+function print_wideip {
 # Print wide IP details
 for wideip in "${!wideip_list[@]}"; do
     echo "Wide IP: $wideip, Details: ${wideip_list[$wideip]}"
 done
-
-# Print and create zones
-for zone in "${!zone_array[@]}"; do
-    echo "Zone: $zone, Subdomains with type 'a': ${a_record_per_zone[$zone]}"
-	
-    for records in "${!a_record_per_zone[$zone]}"; do
-		string="{\"ttl\":3600,\"a_record\":{\"name\":\"ww3\",\"values\":[\"8.8.8.8\"]}}"
-    done
-	
-
-done
-
-# Unset variables
-unset current_wideip_info name subdomain domain type aliases description status failure_rcode last_resort_pool load_balancing_decision_log metadata minimal_response partition persist_cidr_ipv4 persist_cidr_ipv6 persistence pool_lb_mode pools pool_cname topology_edns0 ttl_persistence poolnames poolnames_array zone_array subdomain_info
-
+}
 #---
 
 #curl -X PUT -H "Authorization: APIToken Rs0aGJm/lda/JmbE00c9lFXWw4I=" -H "Accept: application/json" -H "Access-Control-Allow-Origin: *" -H "x-volterra-apigw-tenant: f5-apac-ent" -H "Content-Type: application/json" -d "{\"metadata\":{\"name\":\"gslb.f5sg.com\",\"namespace\":\"system\"},\"spec\":{\"primary\":{\"allow_http_lb_managed_records\":true,\"default_rr_set_group\":[{\"ttl\":3600,\"a_record\":{\"name\":\"ww3\",\"values\":[\"8.8.8.8\"]}},{\"ttl\":3600,\"a_record\":{\"name\":\"www\",\"values\":[\"8.8.8.9\"]}}],\"default_soa_parameters\":{},\"dnssec_mode\":{},\"rr_set_group\":[],\"soa_parameters\":{\"refresh\":3600,\"expire\":0,\"retry\":60,\"negative_ttl\":0,\"ttl\":0}}}}" https://cag-waap2023.console.ves.volterra.io/api/config/dns/namespaces/system/dns_zones/gslb.f5sg.com
